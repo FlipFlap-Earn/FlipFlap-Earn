@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flappy Bird Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            background-color: #70c5ce;
+        }
+        .message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: white;
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+        #moneyDisplay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 24px;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        #restartButton {
+            position: absolute;
+            top: 60%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 18px;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: none;
+        }
+        #restartButton:hover {
+            background-color: #45a049;
+        }
+        #homeIcon {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 32px;
+            cursor: pointer;
+            color: white;
+        }
+        #homePopup {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            display: none;
+            font-size: 20px;
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+        #homePopup button {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        #homePopup button:hover {
+            background-color: #45a049;
+        }
+        #withdrawButton {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        #withdrawButton:hover {
+            background-color: #d32f2f;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="endMessage" class="message" style="display: none;"></div>
+    <div id="moneyDisplay">Account Balance: $0</div>
+    <button id="restartButton">Restart Game</button>
+    
+    <!-- Home Icon -->
+    <div id="homeIcon">🏠</div>
+
+    <!-- Popup to show player data -->
+    <div id="homePopup">
+        <h2>Player Data</h2>
+        <p>Score: <span id="scoreDisplay">0</span></p>
+        <p>Account Balance: $<span id="accountBalanceDisplay">0</span></p>
+        <button id="closePopup">Close</button>
+        <button id="withdrawButton">WITHDRAW</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Resize canvas to fit window size
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        // Game settings - Adjust canvas size on page load and resize
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Bird settings (changing to circle)
+        const bird = {
+            x: 50,
+            y: canvas.height / 2,
+            radius: 15,  // Bird radius size
+            gravity: 0.6,
+            lift: -6,
+            velocity: 0,
+            draw: function() {
+                ctx.fillStyle = "#FFD700"; // Gold color for bird
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2, false);
+                ctx.closePath();
+                ctx.fill();
+            },
+            update: function() {
+                this.velocity += this.gravity;
+                this.y += this.velocity;
+
+                // Prevent bird from falling below the canvas
+                if (this.y + this.radius > canvas.height) {
+                    this.y = canvas.height - this.radius;
+                    this.velocity = 0;
+                }
+
+                // Prevent bird from going above the canvas
+                if (this.y - this.radius < 0) {
+                    this.y = this.radius;
+                    this.velocity = 0;
+                }
+            }
+        };
+
+        // Bamboo pipes settings (make pipes smaller)
+        const pipes = [];
+        const bambooWidth = 60; // Bamboo width
+        const bambooGap = 200; // Increased gap between bamboo structures
+        const maxPipeHeight = canvas.height - bambooGap - 20; // Reduced height of pipes
+        let pipeSpeed = 2; // Constant speed for pipes
+
+        // Score settings
+        let score = 0;
+        let money = 0; // Player's account balance
+        let isGamePaused = false; // Flag to pause the game
+
+        // Create new bamboo (pipe) with smaller pipes and larger gap
+        function createPipe() {
+            if (isGamePaused) return;
+            const pipeHeight = Math.floor(Math.random() * (maxPipeHeight)); // Decreased pipe height
+            pipes.push({ x: canvas.width, top: pipeHeight, bottom: pipeHeight + bambooGap });
+        }
+
+        // Draw bamboo structures (pipes)
+        function drawBamboo() {
+            ctx.fillStyle = "#228B22";  // Bamboo color
+            pipes.forEach(pipe => {
+                // Top bamboo
+                ctx.fillRect(pipe.x, 0, bambooWidth, pipe.top);
+
+                // Bottom bamboo
+                ctx.fillRect(pipe.x, pipe.bottom, bambooWidth, canvas.height - pipe.bottom);
+
+                // Adding bamboo texture details (vertical lines)
+                ctx.fillStyle = "#6B8E23"; // Slightly darker bamboo color
+                for (let i = 0; i < pipe.top; i += 20) {
+                    ctx.fillRect(pipe.x + 10, i, 10, 20);
+                }
+                for (let i = pipe.bottom; i < canvas.height; i += 20) {
+                    ctx.fillRect(pipe.x + 10, i, 10, 20);
+                }
+            });
+        }
+
+        // Update bamboo positions
+        function updatePipes() {
+            if (isGamePaused) return;
+            pipes.forEach(pipe => {
+                pipe.x -= pipeSpeed;
+            });
+
+            // Remove pipes when they move off the screen
+            if (pipes[0] && pipes[0].x + bambooWidth < 0) {
+                pipes.shift();
+                score++;  // Increase score when the bird successfully passes a bamboo
+
+                // Add $1 after passing every 10 pipes
+                if (score % 10 === 0) {
+                    money += 1; // Add $1 for every 10 pipes passed
+                    document.getElementById("moneyDisplay").innerText = `Account Balance: $${money}`;
+                }
+            }
+        }
+
+        // Collision detection
+        function checkCollision() {
+            for (let pipe of pipes) {
+                if (
+                    bird.x + bird.radius > pipe.x &&
+                    bird.x - bird.radius < pipe.x + bambooWidth &&
+                    (bird.y - bird.radius < pipe.top || bird.y + bird.radius > pipe.bottom)
+                ) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // Display end message
+        function displayEndMessage() {
+            const messageElement = document.getElementById("endMessage");
+            messageElement.style.display = "block";
+            
+            messageElement.innerHTML = `
+                SORRY YOU HAVE LOST KEEP GOING! <br>
+                YOU CAN TRY AGAIN
+            `;
+
+            document.getElementById("restartButton").style.display = "block"; // Show restart button
+            isGamePaused = true; // Pause the game
+        }
+
+        // Game loop
+        function gameLoop() {
+            if (isGamePaused) return; // Stop the game loop if game is paused
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            bird.update();
+            bird.draw();
+            drawBamboo();
+            updatePipes();
+
+            // Check if collision happens
+            if (checkCollision()) {
+                displayEndMessage();
+                return;  // Stop the game
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Reset game
+        function resetGame() {
+            bird.y = canvas.height / 2;
+            bird.velocity = 0;
+            pipes.length = 0;
+            score = 0;
+            money = 0; // Reset account balance
+            document.getElementById("moneyDisplay").innerText = `Account Balance: $${money}`;
+            document.getElementById("endMessage").style.display = "none"; // Hide the message
+            document.getElementById("restartButton").style.display = "none"; // Hide restart button
+            isGamePaused = false; // Unpause the game
+            gameLoop(); // Restart the game loop
+        }
+
+        // Event listener for bird control (Spacebar or Tap)
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && !isGamePaused) {
+                bird.velocity = bird.lift;
+            }
+        });
+
+        // Mobile touch event (tap to flap)
+        canvas.addEventListener('touchstart', () => {
+            if (!isGamePaused) {
+                bird.velocity = bird.lift;
+            }
+        });
+
+        // Generate pipes at regular intervals
+        setInterval(createPipe, 2000);
+
+        // Add event listener to the restart button
+        document.getElementById("restartButton").addEventListener("click", () => {
+            resetGame();
+        });
+
+        // Event listener for the home icon (show player data)
+        document.getElementById("homeIcon").addEventListener("click", () => {
+            document.getElementById("homePopup").style.display = "block";
+            document.getElementById("scoreDisplay").innerText = score;
+            document.getElementById("accountBalanceDisplay").innerText = money;
+        });
+
+        // Event listener to close the popup
+        document.getElementById("closePopup").addEventListener("click", () => {
+            document.getElementById("homePopup").style.display = "none";
+        });
+
+        // Event listener for withdraw button
+        document.getElementById("withdrawButton").addEventListener("click", () => {
+            alert(`You have successfully withdrawn $${money}`);
+            money = 0; // Reset account balance
+            document.getElementById("moneyDisplay").innerText = `Account Balance: $${money}`;
+        });
+
+        // Start the game loop
+        gameLoop();
+    </script>
+</body>
+</html>
