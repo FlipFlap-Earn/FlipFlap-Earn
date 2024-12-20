@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flappy Bird Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            background-color: #70c5ce;
+        }
+        .message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: white;
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+        #moneyDisplay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 24px;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        #restartButton {
+            position: absolute;
+            top: 60%;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 18px;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: none;
+        }
+        #restartButton:hover {
+            background-color: #45a049;
+        }
+        #homeIcon {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 32px;
+            cursor: pointer;
+            color: white;
+        }
+        #homePopup {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            width: 300px;
+            height: 350px;
+            padding: 20px;
+            border-radius: 10px;
+            display: none;
+            font-size: 20px;
+            text-align: center;
+            font-family: Arial, sans-serif;
+            box-sizing: border-box;
+        }
+        #homePopup input {
+            width: 80%;
+            padding: 8px;
+            margin-top: 15px;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        #homePopup button {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        #homePopup button:hover {
+            background-color: #45a049;
+        }
+        #withdrawButton {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        #withdrawButton:hover {
+            background-color: #d32f2f;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="endMessage" class="message" style="display: none;"></div>
+    <div id="moneyDisplay">Account Balance: $0</div>
+    <button id="restartButton">Restart Game</button>
+    
+    <!-- Home Icon -->
+    <div id="homeIcon">🏠</div>
+
+    <!-- Popup to show player data -->
+    <div id="homePopup">
+        <h2>Player Data</h2>
+        <p>Score: <span id="scoreDisplay">0</span></p>
+        <p>Account Balance: $<span id="accountBalanceDisplay">0</span></p>
+        <input type="text" id="upiId" placeholder="Enter your UPI ID">
+        <button id="closePopup">Close</button>
+        <button id="withdrawButton">WITHDRAW</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Resize canvas to fit window size
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        // Game settings
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Bird settings
+        const bird = {
+            x: 50,
+            y: canvas.height / 2,
+            radius: 15,
+            gravity: 0.6,
+            lift: -6,
+            velocity: 0,
+            draw: function() {
+                ctx.fillStyle = "#FFD700";
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2, false);
+                ctx.closePath();
+                ctx.fill();
+            },
+            update: function() {
+                this.velocity += this.gravity;
+                this.y += this.velocity;
+
+                if (this.y + this.radius > canvas.height) {
+                    this.y = canvas.height - this.radius;
+                    this.velocity = 0;
+                }
+                if (this.y - this.radius < 0) {
+                    this.y = this.radius;
+                    this.velocity = 0;
+                }
+            }
+        };
+
+        const pipes = [];
+        const bambooWidth = 60;
+        const bambooGap = 200;
+        let pipeSpeed = 2;
+        let score = 0;
+        let money = 0;
+        let isGamePaused = false;
+
+        function createPipe() {
+            if (isGamePaused) return;
+            const pipeHeight = Math.floor(Math.random() * (canvas.height - bambooGap - 20));
+            pipes.push({ x: canvas.width, top: pipeHeight, bottom: pipeHeight + bambooGap });
+        }
+
+        function drawBamboo() {
+            ctx.fillStyle = "#228B22";
+            pipes.forEach(pipe => {
+                ctx.fillRect(pipe.x, 0, bambooWidth, pipe.top);
+                ctx.fillRect(pipe.x, pipe.bottom, bambooWidth, canvas.height - pipe.bottom);
+            });
+        }
+
+        function updatePipes() {
+            if (isGamePaused) return;
+            pipes.forEach(pipe => {
+                pipe.x -= pipeSpeed;
+            });
+
+            if (pipes[0] && pipes[0].x + bambooWidth < 0) {
+                pipes.shift();
+                score++;
+                money++;
+                document.getElementById("moneyDisplay").innerText = `Account Balance: $${money}`;
+                document.getElementById("accountBalanceDisplay").innerText = money;
+            }
+        }
+
+        function checkCollision() {
+            for (let pipe of pipes) {
+                if (
+                    bird.x + bird.radius > pipe.x &&
+                    bird.x - bird.radius < pipe.x + bambooWidth &&
+                    (bird.y - bird.radius < pipe.top || bird.y + bird.radius > pipe.bottom)
+                ) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function displayEndMessage() {
+            const messageElement = document.getElementById("endMessage");
+            messageElement.style.display = "block";
+            messageElement.innerHTML = `
+                SORRY YOU HAVE LOST KEEP GOING! <br>
+                YOU CAN TRY AGAIN
+            `;
+
+            document.getElementById("restartButton").style.display = "block";
+            isGamePaused = true;
+        }
+
+        function gameLoop() {
+            if (isGamePaused) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            bird.update();
+            bird.draw();
+            drawBamboo();
+            updatePipes();
+
+            if (checkCollision()) {
+                displayEndMessage();
+                return;
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function resetGame() {
+            bird.y = canvas.height / 2;
+            bird.velocity = 0;
+            pipes.length = 0;
+            score = 0;
+            money = 0;
+            document.getElementById("moneyDisplay").innerText = `Account Balance: $${money}`;
+            document.getElementById("accountBalanceDisplay").innerText = money;
+            document.getElementById("endMessage").style.display = "none";
+            document.getElementById("restartButton").style.display = "none";
+            isGamePaused = false;
+            gameLoop();
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && !isGamePaused) {
+                bird.velocity = bird.lift;
+            }
+        });
+
+        canvas.addEventListener('touchstart', () => {
+            if (!isGamePaused) {
+                bird.velocity = bird.lift;
+            }
+        });
+
+        setInterval(createPipe, 2000);
+
+        document.getElementById("restartButton").addEventListener("click", resetGame);
+
+        document.getElementById("homeIcon").addEventListener("click", () => {
+            document.getElementById("homePopup").style.display = "block";
+            document.getElementById("scoreDisplay").innerText = score;
+        });
+
+        document.getElementById("closePopup").addEventListener("click", () => {
+            document.getElementById("homePopup").style.display = "none";
+        });
+
+        document.getElementById("withdrawButton").addEventListener("click", () => {
+            const upiId = document.getElementById("upiId").value;
+            if (upiId === "") {
+                alert("Please enter your UPI ID to withdraw.");
+            } else {
+                alert(`**KYA BE CHUTIYE 🤣**`);
+                money = 0; // Reset account balance
+                document.getElementById("moneyDisplay").innerText = `Account Balance: $${money}`;
+                document.getElementById("accountBalanceDisplay").innerText = money;
+            }
+        });
+
+        gameLoop();
+    </script>
+</body>
+</html>
